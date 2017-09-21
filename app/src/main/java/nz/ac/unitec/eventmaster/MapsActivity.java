@@ -4,10 +4,12 @@ import android.content.Context;
 import android.location.Address;
 import android.location.Geocoder;
 import android.location.Location;
+import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.app.FragmentActivity;
-import android.os.Bundle;
 import android.util.Log;
+import android.widget.ArrayAdapter;
+import android.widget.ListView;
 
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
@@ -24,22 +26,51 @@ import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
-import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.tasks.OnCompleteListener;
 import com.google.android.gms.tasks.Task;
+import com.sothree.slidinguppanel.SlidingUpPanelLayout;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 
+
+
 public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+
+    private class StableArrayAdapter extends ArrayAdapter<String> {
+
+        HashMap<String, Integer> mIdMap = new HashMap<String, Integer>();
+
+        public StableArrayAdapter(Context context, int textViewResourceId,
+                                  List<String> objects) {
+            super(context, textViewResourceId, objects);
+            for (int i = 0; i < objects.size(); ++i) {
+                mIdMap.put(objects.get(i), i);
+            }
+        }
+
+        @Override
+        public long getItemId(int position) {
+            String item = getItem(position);
+            return mIdMap.get(item);
+        }
+
+        @Override
+        public boolean hasStableIds() {
+            return true;
+        }
+
+    }
 
     private GoogleMap mMap;
     private double lat;
@@ -70,9 +101,27 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
 
+
+        final ListView listview = findViewById(R.id.list_view);
+        final ArrayList<String> list = new ArrayList<String>();
+
+        ((SlidingUpPanelLayout)findViewById(R.id.slMap)).setScrollableView(listview);
+
         final FusedLocationProviderClient client = LocationServices.getFusedLocationProviderClient(getApplicationContext());
         final Geocoder gcd = new Geocoder(getApplicationContext(), Locale.getDefault());
         final RequestQueue queue = Volley.newRequestQueue(getApplicationContext());
+
+        LocationRequest req = new LocationRequest();
+        req.setInterval(10000); // 10 seconds
+        req.setFastestInterval(5000); // 5 seconds
+        req.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
+
+        client.requestLocationUpdates(req,new LocationCallback(){
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                Log.e("location:",locationResult.getLastLocation().toString());
+            }
+        },null);
 
         try {
             Task<Location> location = client.getLastLocation();
@@ -80,8 +129,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             location.addOnCompleteListener(new OnCompleteListener<Location>() {
                 @Override
                 public void onComplete(@NonNull Task<Location> task) {
-                    lat = task.getResult().getLatitude();
-                    lng = task.getResult().getLongitude();
+                    try {
+                        lat = task.getResult().getLatitude();
+                        lng = task.getResult().getLongitude();
+                        LatLng marker = new LatLng(lat, lng);
+                        mMap.addMarker(new MarkerOptions().position(marker).title("I am here!").icon(BitmapDescriptorFactory.fromResource(R.mipmap.ic_map_pin_dark_red)));
+                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(marker, 10));
+                    } catch (NullPointerException e) {
+                        System.out.println("task = null");
+                    }
                     System.out.println("lat = " + lat + ", lng = " + lng);
 
                     List<Address> addresses = null;
@@ -106,14 +162,22 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                             for (int index = 0; index < length; index++) {
                                                 JSONObject event = events.getJSONObject(index);
                                                 String eventName = event.getString("name");
-                                                JSONObject sales = event.getJSONObject("sales");
-                                                JSONObject publicObj = sales.getJSONObject("public");
-                                                String startDateTime = publicObj.getString("startDateTime");
-                                                JSONArray priceRanges = event.getJSONArray("priceRanges");
-                                                JSONObject priceRange = priceRanges.getJSONObject(0);
-                                                String currency = priceRange.getString("currency");
-                                                String minPrice = priceRange.getString("min");
-                                                String maxPrice = priceRange.getString("max");
+                                                JSONObject dates = event.getJSONObject("dates");
+                                                JSONObject start = dates.getJSONObject("start");
+                                                String startDateTime = start.getString("dateTime");
+
+                                                String currency = "";
+                                                String minPrice = "";
+                                                String maxPrice = "";
+                                                try {
+                                                    JSONArray priceRanges = event.getJSONArray("priceRanges");
+                                                    JSONObject priceRange = priceRanges.getJSONObject(0);
+                                                    currency = priceRange.getString("currency");
+                                                    minPrice = priceRange.getString("min");
+                                                    maxPrice = priceRange.getString("max");
+                                                } catch (JSONException e) {
+
+                                                }
 
                                                 JSONObject embeddedEvent = event.getJSONObject("_embedded");
                                                 JSONArray venues = embeddedEvent.getJSONArray("venues");
@@ -126,12 +190,18 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                                     double venueLng = Double.parseDouble(venueLocation.get("longitude").toString());
                                                     double venueLat = Double.parseDouble(venueLocation.get("latitude").toString());
 
-                                                    LatLng venueMarker = new LatLng(venueLat, venueLng);
-                                                    mMap.addMarker(new MarkerOptions().position(venueMarker).title(eventName).snippet(startDateTime + " " + minPrice + currency + " - " + maxPrice + currency));
-                                                    mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(venueMarker, 10));
-
+                                                    if((venueLng != 0d) && (venueLat != 0d)) {
+                                                        LatLng venueMarker = new LatLng(venueLat, venueLng);
+                                                        mMap.addMarker(new MarkerOptions().position(venueMarker).title(eventName).snippet(startDateTime + " " + minPrice + currency + " - " + maxPrice + currency).icon(BitmapDescriptorFactory.fromResource(R.mipmap.ic_map_pin_azure)));
+                                                        mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(venueMarker, 10));
+                                                        list.add(eventName + " (price from " + minPrice + currency + " to " + maxPrice + currency + ", start at " + startDateTime + ")");
+                                                    }
                                                 }
                                             }
+
+                                            final StableArrayAdapter adapter = new StableArrayAdapter(getApplicationContext(), android.R.layout.simple_list_item_1, list);
+                                            listview.setAdapter(adapter);
+
                                         } catch (JSONException e) {
                                             e.printStackTrace();
                                         } finally {
@@ -152,17 +222,5 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         } catch(SecurityException ex) {
             ex.printStackTrace();
         }
-
-        LocationRequest req = new LocationRequest();
-        req.setInterval(10000); // 10 seconds
-        req.setFastestInterval(5000); // 5 seconds
-        req.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
-
-        client.requestLocationUpdates(req,new LocationCallback(){
-            @Override
-            public void onLocationResult(LocationResult locationResult) {
-                Log.e("location:",locationResult.getLastLocation().toString());
-            }
-        },null);
     }
 }
