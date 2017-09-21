@@ -8,8 +8,10 @@ import android.os.Bundle;
 import android.support.annotation.NonNull;
 import android.support.v4.app.FragmentActivity;
 import android.util.Log;
+import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.ProgressBar;
 
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
@@ -99,8 +101,10 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
      */
     @Override
     public void onMapReady(GoogleMap googleMap) {
+
         mMap = googleMap;
 
+        final ProgressBar progressBar = findViewById(R.id.progressBar);
 
         final ListView listview = findViewById(R.id.list_view);
         final ArrayList<String> list = new ArrayList<String>();
@@ -112,8 +116,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         final RequestQueue queue = Volley.newRequestQueue(getApplicationContext());
 
         LocationRequest req = new LocationRequest();
-        req.setInterval(10000); // 10 seconds
-        req.setFastestInterval(5000); // 5 seconds
+        req.setInterval(10000);
+        req.setFastestInterval(5000);
         req.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
 
         client.requestLocationUpdates(req,new LocationCallback(){
@@ -133,7 +137,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                         lat = task.getResult().getLatitude();
                         lng = task.getResult().getLongitude();
                         LatLng marker = new LatLng(lat, lng);
-                        mMap.addMarker(new MarkerOptions().position(marker).title("I am here!").icon(BitmapDescriptorFactory.fromResource(R.mipmap.ic_map_pin_dark_red)));
+                        mMap.addMarker(new MarkerOptions().position(marker).title("I'm here!").icon(BitmapDescriptorFactory.fromResource(R.mipmap.ic_map_pin_dark_red)));
                         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(marker, 10));
                     } catch (NullPointerException e) {
                         System.out.println("task = null");
@@ -155,6 +159,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                 (Request.Method.GET, url, null, new Response.Listener<JSONObject>() {
                                     @Override
                                     public void onResponse(JSONObject response) {
+                                        progressBar.setVisibility(View.INVISIBLE);
                                         try {
                                             JSONObject embedded = response.getJSONObject("_embedded");
                                             JSONArray events = embedded.getJSONArray("events");
@@ -205,7 +210,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                                         } catch (JSONException e) {
                                             e.printStackTrace();
                                         } finally {
-
+                                            progressBar.setVisibility(View.INVISIBLE);
                                         }
                                     }
                                 }, new Response.ErrorListener() {
