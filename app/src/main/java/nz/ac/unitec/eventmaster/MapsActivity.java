@@ -131,7 +131,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         listView.setOnItemClickListener(new AdapterView.OnItemClickListener() {
             @Override
             public void onItemClick(AdapterView<?> adapterView, View view, int i, long l) {
-                markers.get(i).showInfoWindow();
+                Marker marker = markers.get(i);
+                marker.showInfoWindow();
+                mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(marker.getPosition(), 15));
             }
         });
 
